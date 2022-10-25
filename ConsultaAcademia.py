@@ -1,8 +1,8 @@
 from ftplib import FTP, all_errors
-from re import T
 from time import strptime, strftime
 import PySimpleGUI as psg
 import json
+
 
 # Função que coleta o usuario e senha para acessar o ftp
 def login():
@@ -26,6 +26,7 @@ def login():
             window.close()
             return user, password, True
     
+
 # Função de acesso ao ftp    
 def acessoftp(user, password):
     fdata = []
@@ -37,6 +38,38 @@ def acessoftp(user, password):
     except all_errors as ftperro:
             return False, ['FTP error:', ftperro]
     return True, fdata
+
+
+# Funcao que valida as linhas do arquivo
+def validaArquivo(lista):
+   errlinhas = {
+      "LinhaErrada": [],
+      "DataErrada": [],
+      "CPFErrado": []
+   }
+   for i, item in enumerate(lista, 1):
+      item = item.split(';')
+      ln = len(item)
+      if ln in (6, 7):
+         try:
+            strptime(item[2], "%Y-%m-%d %H:%M:%S")
+            strptime(item[3], "%Y-%m-%d %H:%M:%S")
+         except ValueError:
+            errlinhas['DataErrada'].append(i)
+         else:
+            try:
+               int(item[5])
+            except ValueError:
+               errlinhas['CPFErrado'].append(i)
+      else:
+         errlinhas['LinhaErrada'].append(i)
+
+   for i in errlinhas.values():
+      if i != []:
+        return False, errlinhas
+
+   return True, ''
+
 
 # Função que transforma a lista de alunos em um JSON
 def dicionario(fdata):
@@ -53,6 +86,7 @@ def dicionario(fdata):
         }
         alunos.update(cadastro)
     return alunos
+
 
 # Função que salva no computador a lista de alunos de acordo com a opção escolhida
 def salvaArquivo(arq, jso=False, csv=False):
@@ -99,10 +133,41 @@ def pesquisa(jsn, dado, cpf, nome, listagem):
 # Função que cria o popUp sobre as informações do programa
 def popupSobre():
     popupsobre = psg.Window('TarifaAgendada', [
-        [psg.Frame(title='Sobre...', layout=[[psg.Text('Desenvolvido por: Caio Satiro\nhttps://github.com/kaiosatiro')]], size=(400, 100))], 
+        [psg.Frame(title='Sobre...', layout=[[psg.Text('Feito por: Caio Satiro\nPython: ftplib - PysimpleGUI ')]], size=(400, 100))], 
         [psg.Exit()]
     ], modal=True, icon='wps.ico')
     evento, valor = popupsobre.read(close=True)
+    if evento == 'Exit':
+        return
+    else:
+        return
+
+# Função que cria um popUp de ajuda no uso do programa
+def popupAjuda():
+    txt = """Na aba aluno --> Pesquise o CPF completo.
+Na aba Lista :
+    Por CPF -----> Pesquise um CPF inconpleto.
+    Por Nome ---> Pesquise um nome inconompleto.
+Não faz diferença pesquisar maiúsculo ou minúsculo, mas acentos fazem a direfença.
+
+Na lista, você pode clicar no nome, ou no CPF, e o dado é inserido na barra de pesquisa automaticamente.
+Dela é possivel copiar, ou alternando para a aba Aluno, fazer a pesquisa do CPF exato, e ver as 
+informações completas do Aluno.
+
+Na aba Lista, clique em pesquisar sem digitar nenhum dado na barra de pesquisa.
+Dessa forma é listado todos os cadastros enviados pela academia.
+
+Na barra do Menu é possível salvar no computador a lista completa em arquivo CSV ou  arquivo JSON.
+Recomendo salvar na pasta da "Area de Trabalho" ou na pasta de Documentos, para evitar erro.
+
+***No inicio, o programa já verifica todas as linhas arquivo, se alguma linha estiver fora do padrão
+ele retorna uma janela de erro com os numeros das linhas erradas. 
+    """
+    popupajuda = psg.Window('TarifaAgendada', [
+        [psg.Frame(title='Ajuda', layout=[[psg.Text(txt)]])], 
+        [psg.Exit()]
+    ], modal=True, icon='wps.ico')
+    evento, valor = popupajuda.read(close=True)
     if evento == 'Exit':
         return
     else:
@@ -172,12 +237,23 @@ def main():
     evento, valor = janela.read() 
 
     if not retorno[0]:
-        erro = f'ERRO de acesso ao FTP\nVerifique o Login e senha.'
+        erro = 'ERRO de acesso ao FTP\nVerifique o Login e senha.'
         psg.Popup(erro, title='ERRO', icon='wps.ico', font=6)
         janela.close()
         return
     elif retorno[0]:
-        alunos = dicionario(retorno[1]) 
+        validacao = validaArquivo(retorno[1])
+        if not validacao[0]:
+            erro = f"""
+Linhas Erradas: {validacao[1]['LinhaErrada']}
+Datas Erradas: {validacao[1]['DataErrada']}
+CPF's Errados: {validacao[1]['CPFErrado']}
+            """
+            psg.Popup(erro, title='Erro no formato do arquivo', icon='wps.ico', font=6)
+            janela.close()
+            return
+        else:
+            alunos = dicionario(retorno[1])
 
     # Laço que monitora os eventos da janela
     while True:
@@ -227,6 +303,8 @@ def main():
                 pass
             except KeyError:
                 pass
+            except UnboundLocalError:
+                pass
         
         # Funções relativas ás opções do menu
         elif evento == 'Json':
@@ -234,7 +312,7 @@ def main():
         elif evento == 'Csv':
             salvaArquivo(retorno[1], csv=True)
         elif evento == 'Ajuda':
-            ...
+            popupAjuda()
         elif evento == 'Sobre...':
             popupSobre()
         elif evento == psg.WIN_CLOSED or evento == 'Exit':
@@ -245,8 +323,8 @@ def main():
 
 if __name__ == '__main__':
     #Variaveis de acesso para teste
-    # USER = ''
-    # PASSWORD = ''
+    USER = ''
+    PASSWORD = ''
     #Chamada da janela principal
     main()
     

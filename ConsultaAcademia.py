@@ -12,7 +12,7 @@ def login():
             [psg.Text("Senha", font=8, expand_x=True), psg.InputText('', key='_pwd_', font=8)],
             [psg.Button('Ok', font=6, bind_return_key=True), psg.Button('Cancel', font=6)]]
 
-    window = psg.Window("Log In", layout, icon='wps.ico')
+    window = psg.Window("Log In", layout, icon="wps.ico")
     user = ''
     password = ''
     while True:
@@ -37,38 +37,43 @@ def acessoftp(user, password):
             ftp.retrlines(f'RETR {arq}', fdata.append)
     except all_errors as ftperro:
             return False, ['FTP error:', ftperro]
-    return True, fdata
+    return True, fdata, arq
 
 
 # Funcao que valida as linhas do arquivo
 def validaArquivo(lista):
-   errlinhas = {
-      "LinhaErrada": [],
-      "DataErrada": [],
-      "CPFErrado": []
-   }
-   for i, item in enumerate(lista, 1):
-      item = item.split(';')
-      ln = len(item)
-      if ln in (6, 7):
-         try:
-            strptime(item[2], "%Y-%m-%d %H:%M:%S")
-            strptime(item[3], "%Y-%m-%d %H:%M:%S")
-         except ValueError:
-            errlinhas['DataErrada'].append(i)
-         else:
-            try:
-               int(item[5])
+    errlinhas = {
+        "LinhaErrada": [],
+        "DataErrada": [],
+        "CPFErrado": []
+    }
+    listaclean = []
+    for i, linha in enumerate(lista, 1):
+        item = linha.split(';')
+        ln = len(item)
+        if ln in (6, 7):
+            try:   
+                #('%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d','%d.%m.%Y', '%d/%m/%Y', '%d-%m-%Y')
+                strptime(item[2], "%Y-%m-%d %H:%M:%S")
+                strptime(item[3], "%Y-%m-%d %H:%M:%S")
             except ValueError:
-               errlinhas['CPFErrado'].append(i)
-      else:
-         errlinhas['LinhaErrada'].append(i)
+                    errlinhas['DataErrada'].append(i)
+            else:
+                try:
+                    int(item[5])
+                except ValueError:
+                    errlinhas['CPFErrado'].append(i)
+                else:
+                    listaclean.append()
+        else:
+            errlinhas['LinhaErrada'].append(i)
 
-   for i in errlinhas.values():
-      if i != []:
-        return False, errlinhas
+    for i in errlinhas.values():
+        if i != []:
+            return False, listaclean, errlinhas
 
-   return True, ''
+    return True, listaclean, errlinhas
+
 
 
 # Função que transforma a lista de alunos em um JSON
@@ -89,20 +94,19 @@ def dicionario(fdata):
 
 
 # Função que salva no computador a lista de alunos de acordo com a opção escolhida
-def salvaArquivo(arq, jso=False, csv=False):
-    pop = psg.popup_get_folder('Escolha a pasta', font=12, default_path='C:/', icon='wps.ico')
-    nome = 'AlunosAcademia_' + strftime("%d-%m-%Y")
+def salvaArquivo(arq, nome, jso=False, txt=False):
+    pop = psg.popup_get_folder('Escolha a pasta', font=12, default_path='C:/', icon="wps.ico")
     dr = f'{pop}/{nome}'
     try:
         if jso:
             with open(dr + '.json', 'w', encoding='utf-8') as jsn:
                 json.dump(arq, jsn)
-        elif csv:
-            with open(dr + '.csv', 'w', encoding='utf-8') as cs:
+        elif txt:
+            with open(dr, 'w', encoding='utf-8') as cs:
                 for linha in arq:
                     cs.writelines(linha + '\n')   
-    except PermissionError as pme:
-        psg.popup('ERRO de permissão, Escolha OUTRA pasta', title='Erro', font=6, icon='wps.ico')
+    except PermissionError:
+        psg.popup('ERRO de permissão, Escolha OUTRA pasta', title='Erro', font=6, icon="wps.ico")
         return
 
 # Função que faz a pesquisa do nome ou CPF da lista de alunos
@@ -130,12 +134,61 @@ def pesquisa(jsn, dado, cpf, nome, listagem):
                 return False, 'CPF não encontrado !'
             return True, retorno, dado
 
+
+#Função que tranforma o dicionario de erros na lista a ser exibida
+def transformadic(dc):
+    linha, data, cpf = list(dc.values())
+
+    i = 0
+    while i < max(len(linha), len(data), len(cpf)):
+        try:
+            linha[i]
+        except IndexError:
+            linha.append('')
+        try:
+            data[i]
+        except IndexError:
+            data.append('')
+        try:
+            cpf[i]
+        except IndexError:
+            cpf.append('')
+        i += 1
+
+    ls = []
+    for x, y, z in zip(linha, data, cpf):
+            ls.append([x, y, z])
+    
+    return ls
+
+
+# Função que exibe os possiveis erro do arquivo
+def exibeErros(dc):
+    ls = transformadic(dc)
+    layout = [[psg.Table(values=ls, headings=[['Linha'], ['Data'], ['CPF']],
+                    auto_size_columns=True, expand_x=True, expand_y=True,font=12, num_rows=10,
+                    sbar_width=25, justification='center', alternating_row_color='#FFE8B9',)],
+            [psg.Text("Proseguir", font=8, expand_x=True)],
+            [psg.Button('Sim', font=6, bind_return_key=True), psg.Button('Não', font=6)]]
+    
+    window = psg.Window("Erros no aquivo", layout, icon="wps.ico", size=(500, 500))
+
+    while True:
+        event, values = window.read(close=True)
+        if event == "Cancel" or event == psg.WIN_CLOSED:
+            window.close()
+            return False
+        elif event == "Sim":
+            window.close()
+            return True
+
+
 # Função que cria o popUp sobre as informações do programa
 def popupSobre():
     popupsobre = psg.Window('TarifaAgendada', [
         [psg.Frame(title='Sobre...', layout=[[psg.Text('Feito por: Caio Satiro\nPython: ftplib - PysimpleGUI ')]], size=(400, 100))], 
         [psg.Exit()]
-    ], modal=True, icon='wps.ico')
+    ], modal=True, icon="wps.ico")
     evento, valor = popupsobre.read(close=True)
     if evento == 'Exit':
         return
@@ -166,7 +219,7 @@ ele retorna uma janela de erro com os numeros das linhas erradas.
     popupajuda = psg.Window('TarifaAgendada', [
         [psg.Frame(title='Ajuda', layout=[[psg.Text(txt)]])], 
         [psg.Exit()]
-    ], modal=True, icon='wps.ico')
+    ], modal=True, icon="wps.ico")
     evento, valor = popupajuda.read(close=True)
     if evento == 'Exit':
         return
@@ -180,7 +233,7 @@ def cria_janela():
 
     # Menu do programa
     menu = [
-        ['Menu',['Salvar', ['Json', 'Csv'], 'Exit']],
+        ['Menu',['Salvar', ['Json', 'Txt'], 'Exit']],
         ['Outros', ['Ajuda', 'Sobre...']]
     ]
 
@@ -221,50 +274,49 @@ def cria_janela():
         [psg.Button('PESQUISAR', expand_x=True, bind_return_key=True, enable_events=True,
                      button_color=("black", "#FDBC3B"), key='_PSQSR_', font=14)]
     ]
-    return psg.Window('Alunos Academia', layout, icon='wps.ico')
+    return psg.Window('Alunos Academia', layout, icon="wps.ico")
 
 # Função principal do programa
 def main():
     # Coleta usuario e senha e checa o retorno
-    USER,  PASSWORD, chk = login()
-    if not chk:
-        return
+    # USER,  PASSWORD, chk = login()
+    # if not chk:
+    #     return
 
     # Cria a janela principal e busca a lista de alunos no ftp
     janela = cria_janela()
     retorno = acessoftp(USER, PASSWORD)
 
-    evento, valor = janela.read() 
-
     if not retorno[0]:
         erro = 'ERRO de acesso ao FTP\nVerifique o Login e senha.'
-        psg.Popup(erro, title='ERRO', icon='wps.ico', font=6)
+        psg.Popup(erro, title='ERRO', icon="wps.ico", font=6)
         janela.close()
         return
     elif retorno[0]:
         validacao = validaArquivo(retorno[1])
         if not validacao[0]:
-            erro = f"""
-Linhas Erradas: {validacao[1]['LinhaErrada']}
-Datas Erradas: {validacao[1]['DataErrada']}
-CPF's Errados: {validacao[1]['CPFErrado']}
-            """
-            psg.Popup(erro, title='Erro no formato do arquivo', icon='wps.ico', font=6)
-            janela.close()
-            return
-        else:
-            alunos = dicionario(retorno[1])
+            prosseguir = exibeErros(validacao[2])
+            if not prosseguir:
+                janela.close()
+                return
+    
+    alunos = dicionario(validacao[1])
 
-    # Laço que monitora os eventos da janela
+    # Loop que monitora os eventos da janela
     while True:
+        #Leitura dos eventos
+        evento, valor = janela.read()
+
         if evento == '_TABGROUP_':
             if valor['_TABGROUP_'] == '_ALUNO_':
                 janela['_RNM_'].Update(disabled=True)
+                janela['_RCPF_'].Update(True)
             elif valor['_TABGROUP_'] == '_LISTA_':
                 janela['_RNM_'].Update(disabled=False)
+                janela['_RNM_'].Update(True)
 
         # Pesquisa por CPF retornando todos os dados
-        if evento == '_PSQSR_' and valor['_TABGROUP_'] == '_ALUNO_':
+        elif evento == '_PSQSR_' and valor['_TABGROUP_'] == '_ALUNO_':
             consulta = pesquisa(alunos, valor['_INPUT_'], valor['_RCPF_'], valor['_RNM_'], False)
             if not consulta[0]:
                 janela['_RPST_'].Update(consulta[1])
@@ -279,23 +331,25 @@ CPF's Errados: {validacao[1]['CPFErrado']}
  
         # Pesquisa por nome ou cpf, não precisa ser exato, retorna resultados proximos
         elif evento == '_PSQSR_' and valor['_TABGROUP_'] == '_LISTA_':
-            consulta = pesquisa(alunos, valor['_INPUT_'], valor['_RCPF_'], valor['_RNM_'], True)
-            if not consulta[0]:
-                janela['_RPST_'].Update(consulta[1])
+            listagem = pesquisa(alunos, valor['_INPUT_'], valor['_RCPF_'], valor['_RNM_'], True)
+            if not listagem[0]:
+                janela['_RPST_'].Update(listagem[1])
                 janela['_TABLE_'].Update([])
             else:
                 janela['_RPST_'].Update('')    
-                janela['_TABLE_'].Update(consulta[1])
+                janela['_TABLE_'].Update(listagem[1])
 
         # Codigo que possibilita a copia do nome ou cpf selecionado na lista para a barra de pesquisa
         elif isinstance(evento, tuple):
             try:
+                print(listagem)
                 tp = evento[2][1]
                 if tp == 0:
-                    snome = consulta[1][evento[2][0]][0]
+                    snome = listagem[1][evento[2][0]][0]
                     janela['_INPUT_'].Update(snome)        
                 elif tp == 1:
-                    scpf = consulta[1][evento[2][0]][1]
+                    print(listagem[1][evento[2][0]][1])
+                    scpf = listagem[1][evento[2][0]][1]
                     janela['_INPUT_'].Update(scpf)
             except TypeError:
                 pass
@@ -308,23 +362,24 @@ CPF's Errados: {validacao[1]['CPFErrado']}
         
         # Funções relativas ás opções do menu
         elif evento == 'Json':
-            salvaArquivo(alunos, jso=True)
-        elif evento == 'Csv':
-            salvaArquivo(retorno[1], csv=True)
+            salvaArquivo(alunos, retorno[2], jso=True)
+        elif evento == 'Txt':
+            salvaArquivo(validacao[1], retorno[2], txt=True)
         elif evento == 'Ajuda':
             popupAjuda()
         elif evento == 'Sobre...':
             popupSobre()
         elif evento == psg.WIN_CLOSED or evento == 'Exit':
-            break
-        #Leitura dos eventos
-        evento, valor = janela.read()  
+            break 
+
     janela.close()
 
 if __name__ == '__main__':
     #Variaveis de acesso para teste
-    USER = ''
-    PASSWORD = ''
+    # USER = 'fr_recreioshopping'
+    # PASSWORD = 'R3creioshopping@2017'
+    USER = 'sf_totalpass'
+    PASSWORD = 'T0talpass@2019'
     #Chamada da janela principal
     main()
     
